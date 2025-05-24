@@ -1,15 +1,15 @@
 import os # For file path operations
 from dotenv import load_dotenv # Load environment variables from .env file
 import streamlit as st # Streamlit library for web app
-from langchain_community.document_loaders import UnstructuredPDFLoader # Document loader for PDF files
+
 from langchain_text_splitters.character import CharacterTextSplitter # Text splitter for breaking documents into smaller chunks
 from langchain_community.vectorstores import FAISS # Vector store for storing document embeddings
 from langchain_community.embeddings import HuggingFaceEmbeddings # Embeddings model for converting text to vectors
 from langchain_groq import ChatGroq # Groq model for generating text
 from langchain.memory import ConversationBufferMemory # Memory for storing conversation history
 from langchain.chains import ConversationalRetrievalChain  # Chain for conversational retrieval
-#from langchain.schema import Document
-#import pdfplumber
+from langchain.schema import Document
+import pdfplumber
 
 
 # Load environment variables from .env file
@@ -21,10 +21,13 @@ working_dir = os.path.dirname(os.path.abspath(__file__))
 
 # read the pdf and extract text
 def load_documents(file_path):
-    loader = UnstructuredPDFLoader(file_path) # Load the PDF file
-    documents = loader.load() # Load the documents
-    return documents # Return the loaded documents
-
+    documents = []
+    with pdfplumber.open(file_path) as pdf:
+        for i, page in enumerate(pdf.pages):
+            text = page.extract_text()
+            if text:
+                documents.append(Document(page_content=text, metadata={"page": i + 1}))
+    return documents
 
 def setup_vector_store(documents):
     embeddings = HuggingFaceEmbeddings() # Load the embeddings model
@@ -42,7 +45,7 @@ def create_chain(vector_store):
         model="llama3-70b-8192",
         temperature=0,
     )
-    retriver = vector_store.as_retriever() # Create a retriever from the vector store
+    retriever = vector_store.as_retriever() # Create a retriever from the vector store
     # Create a memory for storing conversation history
     memory = ConversationBufferMemory(
         llm=llm,  # Use the same LLM for memory
@@ -52,7 +55,7 @@ def create_chain(vector_store):
         ) 
     chain = ConversationalRetrievalChain.from_llm(
         llm=llm,  # Use the same LLM for the chain
-        retriever=retriver,  # Use the retriever from the vector store
+        retriever=retriever,  # Use the retriever from the vector store
         memory=memory,  # Use the memory for conversation history
         verbose=True,  # Enable verbose mode for debugging
     )
